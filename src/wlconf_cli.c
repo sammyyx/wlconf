@@ -37,6 +37,9 @@ int main (int argc, char **argv)
 		printf("allow mac:%s\n", node->macaddr);
 	}
 	
+	/* Commit your changes */
+	wlconf->change_commit(wlconf);
+	
 	/* destroy wlconf */
 	wlconf_free(wlconf);
 }
