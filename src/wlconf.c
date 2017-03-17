@@ -355,6 +355,22 @@ static int set_macfilter(struct wlconf *wlconf, char *mode)
 	}
 }
 
+
+static int change_commit(struct wlconf *wlconf)
+{
+	struct uci_ptr ptr;
+	char str[] = "wireless";
+	if (uci_lookup_ptr(wlconf->ctx, &ptr, str, true) != UCI_OK)
+	{
+		printf("error in uci_lookup_ptr\n");
+		return -1;
+	}
+	if (uci_commit(wlconf->ctx, &ptr.p, false) != UCI_OK) {
+		printf("commit error!\n");
+		return -1;
+	}
+}
+
 static int init_wlconf(struct wlconf *wlconf)
 {
 	struct uci_element *section_e;
@@ -426,6 +442,7 @@ static int init_wlconf(struct wlconf *wlconf)
 	wlconf->set_ssid_hidden = &set_ssid_hidden;
 	wlconf->add_macfilterlist = &add_macfilterlist;
 	wlconf->del_macfilterlist = &del_macfilterlist;
+	wlconf->change_commit = &change_commit;
 }
 
 
@@ -441,7 +458,7 @@ struct maclist *maclist_alloc()
 	return list;
 }
 
-void wlconf_free(struct wlconf *wlconf)
+int wlconf_free(struct wlconf *wlconf)
 {
 	/*
 	 * commit change after all the saves
@@ -451,9 +468,11 @@ void wlconf_free(struct wlconf *wlconf)
 	if (uci_lookup_ptr(wlconf->ctx, &ptr, str, true) != UCI_OK)
 	{
 		printf("error in uci_lookup_ptr\n");
+		return -1;
 	}
 	if (uci_commit(wlconf->ctx, &ptr.p, false) != UCI_OK) {
 		printf("commit error!\n");
+		return-1;
 	}
 
 	uci_unload(wlconf->ctx, wlconf->pkg);
@@ -470,6 +489,7 @@ void wlconf_free(struct wlconf *wlconf)
 	// printf("FREE:uci_conf\n");
 	free(wlconf->conf);
 	free(wlconf);
+	return 0;
 }
 
 struct wlconf *wlconf_alloc(void)

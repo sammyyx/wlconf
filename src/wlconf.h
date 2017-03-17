@@ -62,9 +62,10 @@ struct wlconf
 	int (*set_macfilter)(struct wlconf *, char *macfilter);
 	int (*add_macfilterlist)(struct wlconf *, char *macaddr);
 	int (*del_macfilterlist)(struct wlconf *, char *macaddr);
+	int (*change_commit)(struct wlconf *);
 };
 
 struct wlconf *wlconf_alloc(void);
-void wlconf_free(struct wlconf *);
+int wlconf_free(struct wlconf *);
 int set_uci_conf(struct wlconf *);
 struct maclist *maclist_alloc(void);
