@@ -159,13 +159,15 @@ static int set_ssid(struct wlconf *wlconf, char *ssid)
 	return 0;
 }
 
-static int set_channel(struct wlconf *wlconf, char *channel)
+static int set_channel(struct wlconf *wlconf, int channel)
 {
 	struct uci_ptr ptr;
 	int rv;
 	char str[100];
+	char s_channel[2];
+	sprintf(s_channel, "%d", channel);
 	strcpy(str, "wireless.radio0.channel=");
-	strcat(str, channel);
+	strcat(str, s_channel);
 	if (uci_lookup_ptr(wlconf->ctx, &ptr, str, true) != UCI_OK)
 	{
 		printf("SET_CHANNEL_ERROR:error in uci_lookup_ptr\n");
@@ -182,36 +184,9 @@ static int set_channel(struct wlconf *wlconf, char *channel)
 		return -1;
 	}
 	uci_save(wlconf->ctx, ptr.p);
-	strcpy(wlconf->conf->channel, channel);
+	wlconf->conf->channel = channel;
 	return 0;
 
-}
-
-static int set_encryption(struct wlconf *wlconf, char *encryption)
-{
-	struct uci_ptr ptr;
-	int rv;
-	char str[100];
-	strcpy(str, "wireless.@wifi-iface[0].encryption=");
-	strcat(str, encryption);
-	if (uci_lookup_ptr(wlconf->ctx, &ptr, str, true) != UCI_OK)
-	{
-		printf("SET_ENCRYPTION_ERROR:error in uci_lookup_ptr\n");
-	}
-	if (wlconf->ctx == NULL)
-	{
-		printf("SET_ENCRYPTION_ERROR:invalid context\n");
-		return -1;
-	}
-	rv = uci_set(wlconf->ctx, &ptr);
-	if (rv != UCI_OK)
-	{
-		printf("SET_ENCRYPTION_ERROR:error in uci_set\n");
-		return -1;
-	}
-	uci_save(wlconf->ctx, ptr.p);
-	strcpy(wlconf->conf->encryption, encryption);
-	return 0;
 }
 
 static int set_key(struct wlconf *wlconf, char *key)
@@ -219,6 +194,22 @@ static int set_key(struct wlconf *wlconf, char *key)
 	struct uci_ptr ptr;
 	int rv;
 	char str[100];
+	if (key == NULL)
+	{
+		strcpy(str, "wireless.@wifi-iface[0].key");
+		if (uci_lookup_ptr(wlconf->ctx, &ptr, str, true) != UCI_OK)
+		{
+			printf("SET_KEY_ERROR:error in uci_lookup_ptr\n");
+		}
+		rv = uci_delete(wlconf->ctx, &ptr);
+		if (rv != UCI_OK)
+		{
+			printf("SET_KEY_ERROR:error in uci_set\n");
+			return -1;
+		}
+		uci_save(wlconf->ctx, ptr.p);
+		return 0;
+	}
 	strcpy(str, "wireless.@wifi-iface[0].key=");
 	strcat(str, key);
 	if (uci_lookup_ptr(wlconf->ctx, &ptr, str, true) != UCI_OK)
@@ -238,6 +229,37 @@ static int set_key(struct wlconf *wlconf, char *key)
 	}
 	uci_save(wlconf->ctx, ptr.p);
 	strcpy(wlconf->conf->key, key);
+	return 0;
+}
+
+static int set_encryption(struct wlconf *wlconf, char *encryption)
+{
+	struct uci_ptr ptr;
+	int rv;
+	char str[100];
+	if (!(strcmp(encryption, NO_ENCRYPTION)))
+	{
+		set_key(wlconf, NULL);
+	}
+	strcpy(str, "wireless.@wifi-iface[0].encryption=");
+	strcat(str, encryption);
+	if (uci_lookup_ptr(wlconf->ctx, &ptr, str, true) != UCI_OK)
+	{
+		printf("SET_ENCRYPTION_ERROR:error in uci_lookup_ptr\n");
+	}
+	if (wlconf->ctx == NULL)
+	{
+		printf("SET_ENCRYPTION_ERROR:invalid context\n");
+		return -1;
+	}
+	rv = uci_set(wlconf->ctx, &ptr);
+	if (rv != UCI_OK)
+	{
+		printf("SET_ENCRYPTION_ERROR:error in uci_set\n");
+		return -1;
+	}
+	uci_save(wlconf->ctx, ptr.p);
+	strcpy(wlconf->conf->encryption, encryption);
 	return 0;
 }
 
@@ -371,7 +393,45 @@ static int change_commit(struct wlconf *wlconf)
 	}
 }
 
-static int init_wlconf(struct wlconf *wlconf)
+static int clear_macfilterlist(struct wlconf *wlconf)
+{
+	struct maclist_node *node;
+	mlist_foreach_element(wlconf->conf->macfilter_list, node)
+	{
+		del_macfilterlist(wlconf, node->macaddr);
+	}
+}
+
+static int set_txpower(struct wlconf *wlconf, int txpower)
+{
+	struct uci_ptr ptr;
+	int rv;
+	char str[100];
+	char s_txpower[2];
+	sprintf(s_txpower, "%d", txpower);
+	strcpy(str, "wireless.radio0.txpower=");
+	strcat(str, s_txpower);
+	if (uci_lookup_ptr(wlconf->ctx, &ptr, str, true) != UCI_OK)
+	{
+		printf("SET_TXPOWER_ERROR:error in uci_lookup_ptr\n");
+	}
+	if (wlconf->ctx == NULL)
+	{
+		printf("SET_TXPOWER_ERROR:invalid context\n");
+		return -1;
+	}
+	rv = uci_set(wlconf->ctx, &ptr);
+	if (rv != UCI_OK)
+	{
+		printf("SET_TXPOWER_ERROR:error in uci_set\n");
+		return -1;
+	}
+	uci_save(wlconf->ctx, ptr.p);
+	wlconf->conf->txpower = txpower;
+	return 0;
+}
+
+static void init_conf(struct wlconf *wlconf)
 {
 	struct uci_element *section_e;
 	uci_foreach_element(&(wlconf->pkg)->sections, section_e)
@@ -385,7 +445,14 @@ static int init_wlconf(struct wlconf *wlconf)
 			char *value = strdup(o->v.string);
 			if (!(strcmp(ele_name, "channel")))
 			{
-				strcpy(wlconf->conf->channel, value);
+				int channel = atoi(value);
+				wlconf->conf->channel = channel;
+			}
+			else if (!(strcmp(ele_name, "txpower")))
+			{
+				int txpower = atoi(value);
+				// printf("txpower:%d", txpower);
+				wlconf->conf->txpower = txpower;
 			}
 			else if (!(strcmp(ele_name, "ssid")))
 			{
@@ -433,6 +500,22 @@ static int init_wlconf(struct wlconf *wlconf)
 			free (value);
 		}
 	}
+}
+
+static int update(struct wlconf *wlconf)
+{
+	uci_unload(wlconf->ctx, wlconf->pkg);
+	if (uci_load(wlconf->ctx, "wireless", &(wlconf->pkg)) != UCI_OK)
+	{
+		printf ("wlconf_ALLOC:error in uci_load\n");
+		wlconf_free(wlconf);
+		return NULL;
+	}
+	init_conf(wlconf);
+}
+
+static void init_func(struct wlconf *wlconf)
+{
 	wlconf->set_ssid = &set_ssid;
 	wlconf->set_channel = &set_channel;
 	wlconf->set_encryption = &set_encryption;
@@ -443,8 +526,16 @@ static int init_wlconf(struct wlconf *wlconf)
 	wlconf->add_macfilterlist = &add_macfilterlist;
 	wlconf->del_macfilterlist = &del_macfilterlist;
 	wlconf->change_commit = &change_commit;
+	wlconf->clear_macfilterlist = &clear_macfilterlist;
+	wlconf->set_txpower = &set_txpower;
+	wlconf->update = &update;
 }
 
+static int init_wlconf(struct wlconf *wlconf)
+{
+	init_conf(wlconf);
+	init_func(wlconf);
+}
 
 struct maclist *maclist_alloc()
 {
@@ -470,10 +561,10 @@ int wlconf_free(struct wlconf *wlconf)
 		printf("error in uci_lookup_ptr\n");
 		return -1;
 	}
-	if (uci_commit(wlconf->ctx, &ptr.p, false) != UCI_OK) {
-		printf("commit error!\n");
-		return-1;
-	}
+	// if (uci_commit(wlconf->ctx, &ptr.p, false) != UCI_OK) {
+	// 	printf("commit error!\n");
+	// 	return-1;
+	// }
 
 	uci_unload(wlconf->ctx, wlconf->pkg);
 	// printf("FREE:unload(uci_package)\n");
