@@ -11,7 +11,10 @@
 #define WPA_WPA2_MIXED "psk-mixed"
 #define NO_ENCRYPTION "none"
 
-#define ONLY_G	"11g"
+#define ONLY_A "11a"
+#define ONLY_B "11b"
+#define ONLY_G "11g"
+#define ONLY_N "11n"
 
 #define MAC_FILTER_DENY "deny"
 #define MAC_FILTER_ALLOW "allow"
@@ -44,9 +47,9 @@ struct uci_conf
 	int channel;
 	char encryption[16];
 	char key[64];
-	char macfilter[5];
+	char macfilter[8];
 	bool hidden;
-	char hwmode[5];
+	char hwmode[4];
 	int txpower;
 	struct maclist *macfilter_list;
 };
